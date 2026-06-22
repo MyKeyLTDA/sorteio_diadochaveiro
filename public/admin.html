@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Painel do Sorteio — MyKey</title>
+<style>
+  :root{--navy:#0f2747;--navy-deep:#08182f;--orange:#f7821b;--orange-soft:#ffa94d;--line:rgba(255,255,255,.12)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:radial-gradient(circle at 20% -10%,#16335c,var(--navy) 45%,var(--navy-deep));color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 60px}
+  .wrap{width:100%;max-width:560px}
+  .brand{text-align:center;margin:12px 0 24px}
+  .key-mark{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:1.5rem}
+  .key-icon{width:32px;height:32px;background:var(--orange);border-radius:9px;display:grid;place-items:center}
+  .key{color:var(--orange)}
+  .eyebrow{margin-top:14px;font-size:.72rem;letter-spacing:3px;text-transform:uppercase;color:var(--orange-soft);font-weight:700}
+  .headline{font-size:1.6rem;margin-top:6px;font-weight:800}
+  .card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:18px;padding:24px 20px}
+  label{display:block;font-size:.8rem;font-weight:600;margin-bottom:6px;color:rgba(255,255,255,.85)}
+  input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:1rem;outline:none}
+  input:focus{border-color:var(--orange)}
+  .btn{width:100%;margin-top:18px;padding:14px;border:none;border-radius:12px;background:var(--orange);color:#08182f;font-size:1rem;font-weight:800;cursor:pointer;box-shadow:0 10px 24px rgba(247,130,27,.35)}
+  .btn.secondary{background:rgba(255,255,255,.1);color:#fff;box-shadow:none}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .msg{font-size:.84rem;margin-top:8px;color:#ff9f9f}
+  .stat-row{display:flex;gap:12px;margin-bottom:18px}
+  .stat{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+  .stat .v{font-size:1.6rem;font-weight:800;color:var(--orange)}
+  .stat .k{font-size:.72rem;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1px}
+  .draw{text-align:center;margin:18px 0;padding:28px 18px;border:2px dashed rgba(247,130,27,.5);border-radius:16px}
+  .draw.idle{border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.5)}
+  .draw .wn{font-size:3.6rem;font-weight:900;color:var(--orange);line-height:1}
+  .draw .wname{font-size:1.25rem;font-weight:700;margin-top:8px}
+  .draw .wmeta{color:rgba(255,255,255,.6);font-size:.82rem;margin-top:4px}
+  .list{margin-top:16px;max-height:340px;overflow-y:auto}
+  .entry{display:flex;align-items:center;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);margin-bottom:6px;font-size:.86rem}
+  .entry.won{background:rgba(247,130,27,.18);border:1px solid rgba(247,130,27,.4)}
+  .entry .en{font-weight:800;color:var(--orange);min-width:48px}
+  .entry .ena{flex:1;padding:0 8px}
+  .entry .ep{color:rgba(255,255,255,.55);font-size:.76rem}
+  .hidden{display:none}
+  .loading{text-align:center;padding:24px;color:rgba(255,255,255,.6)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="key-mark"><span class="key-icon">🔑</span><span>My<span class="key">Key</span></span></div>
+    <div class="eyebrow">Organizador</div>
+    <div class="headline">Painel do Sorteio</div>
+  </div>
+
+  <div id="login" class="card">
+    <label for="senha">Senha de acesso</label>
+    <input id="senha" type="password" placeholder="••••••••" autocomplete="current-password">
+    <div class="msg" id="msgLogin"></div>
+    <button class="btn" id="btnLogin">Entrar</button>
+  </div>
+
+  <div id="panel" class="hidden">
+    <div class="stat-row">
+      <div class="stat"><div class="v" id="stTotal">0</div><div class="k">Participantes</div></div>
+      <div class="stat"><div class="v" id="stLast">—</div><div class="k">Último nº</div></div>
+    </div>
+    <div class="draw idle" id="draw">Pronto para sortear</div>
+    <button class="btn" id="btnSortear">🎲 Sortear ganhador</button>
+    <button class="btn secondary" id="btnAtualizar">Atualizar lista</button>
+    <div class="list" id="lista"></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const API='/api';
+let senha='';
+let participantes=[];
+
+function pad(n){return String(n).padStart(3,'0')}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+$('btnLogin').addEventListener('click', entrar);
+$('senha').addEventListener('keydown',e=>{if(e.key==='Enter')entrar()});
+
+async function entrar(){
+  senha=$('senha').value;
+  $('msgLogin').textContent='';
+  const b=$('btnLogin'); b.disabled=true; b.textContent='Entrando...';
+  const ok=await carregar();
+  if(ok){ $('login').classList.add('hidden'); $('panel').classList.remove('hidden'); }
+  else{ $('msgLogin').textContent='Senha incorreta.'; senha=''; }
+  b.disabled=false; b.textContent='Entrar';
+}
+
+async function carregar(){
+  $('lista').innerHTML='<div class="loading">Carregando...</div>';
+  try{
+    const r=await fetch(`${API}/listar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
+    if(r.status===401) return false;
+    const j=await r.json();
+    if(!r.ok) return false;
+    participantes=j.participantes||[];
+    $('stTotal').textContent=participantes.length;
+    $('stLast').textContent=participantes.length?pad(participantes[participantes.length-1].numero):'—';
+    render();
+    return true;
+  }catch(e){ $('lista').innerHTML='<div class="loading">Erro de conexão.</div>'; return false; }
+}
+
+function render(winner){
+  const el=$('lista');
+  if(!participantes.length){el.innerHTML='<div class="loading">Nenhum cadastro ainda.</div>';return}
+  el.innerHTML=participantes.map(p=>
+    `<div class="entry ${p.numero===winner?'won':''}">
+       <span class="en">${pad(p.numero)}</span>
+       <span class="ena">${esc(p.nome)}</span>
+       <span class="ep">${esc(p.telefone)}</span>
+     </div>`).join('');
+}
+
+$('btnAtualizar').addEventListener('click', carregar);
+
+$('btnSortear').addEventListener('click', async ()=>{
+  await carregar();
+  if(!participantes.length){ $('draw').className='draw idle'; $('draw').textContent='Nenhum participante.'; return; }
+  const d=$('draw'); d.className='draw';
+  // animacao visual; resultado real vem do servidor
+  let t=0; const total=18;
+  const spin=setInterval(async ()=>{
+    const r=participantes[Math.floor(Math.random()*participantes.length)];
+    d.innerHTML=`<div class="wn">${pad(r.numero)}</div>`;
+    if(++t>=total){
+      clearInterval(spin);
+      try{
+        const res=await fetch(`${API}/sortear`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
+        const j=await res.json();
+        if(!res.ok){ d.className='draw idle'; d.textContent=j.erro||'Erro ao sortear.'; return; }
+        const g=j.ganhador;
+        d.innerHTML=`<div class="wn">${pad(g.numero)}</div>
+          <div class="wname">🎉 ${esc(g.nome)}</div>
+          <div class="wmeta">${esc(g.telefone)} • ${esc(g.email)}</div>`;
+        render(g.numero);
+      }catch(e){ d.className='draw idle'; d.textContent='Falha de conexão.'; }
+    }
+  },80);
+});
+</script>
+</body>
+</html>
