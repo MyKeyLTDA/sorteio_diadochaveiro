@@ -1,13 +1,12 @@
 # Sorteio Dia do Chaveiro — MyKey
 
-Cadastro com verificação por e-mail (OTP) e sorteio no servidor. Toda a lógica e o acesso ao banco ficam em Netlify Functions — o navegador nunca fala com o Supabase nem vê credenciais.
+Cadastro direto e sorteio no servidor. Toda a lógica e o acesso ao banco ficam em Netlify Functions — o navegador nunca fala com o Supabase nem vê credenciais.
 
 ## Como funciona a segurança
 
 - **Nenhuma credencial no front-end.** As páginas só chamam `/api/...`.
 - **Supabase com RLS bloqueando tudo** para chaves públicas. Só a `service_role` (que fica nas variáveis de ambiente do Netlify) acessa as tabelas.
-- **Cadastro em 2 etapas com OTP por e-mail.** Só vira participante quem confirma um código de 6 dígitos. Isso amarra cada número a um e-mail real.
-- **Anti-duplicado:** e-mail normalizado (Gmail com pontos/+tag viram o mesmo), `unique` no banco, limite por IP.
+- **Anti-duplicado:** bloqueia se o e-mail OU o telefone já existir. E-mail normalizado (Gmail com pontos/+tag colapsam), telefone comparado só por dígitos, `unique` no banco e limite por IP.
 - **Admin em página separada** (`/admin.html`, com `noindex`), protegida por senha validada no servidor.
 - **Sorteio feito no servidor** com aleatoriedade criptográfica.
 
@@ -15,10 +14,25 @@ Cadastro com verificação por e-mail (OTP) e sorteio no servidor. Toda a lógic
 
 ## Passo a passo de deploy
 
+> **IMPORTANTE — não arraste a pasta para o Netlify (Deploy manual).**
+> Este projeto tem Netlify Functions, que dependem das bibliotecas `@supabase/supabase-js`
+> e `nodemailer`. O "Deploy manual" (arrastar pasta) NÃO roda `npm install` nem builda as
+> Functions — o site abriria, mas todo `/api/...` quebraria. O deploy precisa rodar o build,
+> o que acontece de duas formas:
+>
+> - **Via GitHub (recomendado):** o Netlify roda `npm install` automaticamente e reimplanta a cada push.
+> - **Via Netlify CLI:** instale o CLI, rode `npm install` e `netlify deploy --build`.
+>
+> Use uma das duas. As instruções abaixo seguem o caminho GitHub.
+
 ### 1. Supabase
 1. Crie um projeto novo (ou use um dedicado).
 2. SQL Editor → cole e rode o conteúdo de `supabase_setup.sql`.
 3. Project Settings → API → copie a **URL** e a **service_role key**.
+   - **Onde usar:** NÃO cole no código. Guarde para o passo 3.3, onde você vai colá-las
+     nas variáveis de ambiente do Netlify com os nomes `SUPABASE_URL` e
+     `SUPABASE_SERVICE_ROLE_KEY`. As Functions leem esses valores via `process.env`
+     em tempo de execução — é por isso que nada aparece no código-fonte do site.
 
 ### 2. GitHub
 1. Crie um repositório e suba esta pasta (o `.gitignore` já evita subir `.env` e `node_modules`).
@@ -36,9 +50,28 @@ Cadastro com verificação por e-mail (OTP) e sorteio no servidor. Toda a lógic
 - Cadastro: `https://seusite.netlify.app/`
 - Painel: `https://seusite.netlify.app/admin.html`
 
+## Alternativa sem Git: Netlify CLI (Windows)
+
+Se preferir não usar GitHub, dá para implantar pela linha de comando:
+
+1. Instale o Node.js (se ainda não tiver) e o CLI:
+   ```
+   npm install -g netlify-cli
+   ```
+2. Dentro da pasta do projeto:
+   ```
+   npm install
+   netlify login
+   netlify deploy --build --prod
+   ```
+3. As variáveis de ambiente: defina pelo painel do Netlify (Site settings → Environment
+   variables) ou pelo CLI com `netlify env:set NOME valor` antes do deploy.
+
+A diferença para arrastar a pasta é que aqui o `npm install` e o build das Functions acontecem.
+
 ## Endpoints (Functions)
-- `POST /api/solicitar-codigo` — valida dados, checa duplicado, envia OTP.
-- `POST /api/confirmar` — valida OTP, grava participante, devolve número.
+
+- `POST /api/cadastrar` — valida dados, bloqueia e-mail/telefone repetido, grava e devolve o número.
 - `POST /api/listar` — (admin) lista participantes. Exige senha.
 - `POST /api/sortear` — (admin) sorteia ganhador no servidor. Exige senha.
 

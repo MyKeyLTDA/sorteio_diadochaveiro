@@ -33,19 +33,15 @@
   .btn{width:100%;margin-top:22px;padding:15px;border:none;border-radius:12px;background:var(--orange);color:#08182f;font-size:1.05rem;font-weight:800;cursor:pointer;transition:transform .1s,opacity .2s;box-shadow:0 10px 24px rgba(247,130,27,.35)}
   .btn:hover{transform:translateY(-1px)}
   .btn:disabled{opacity:.6;cursor:not-allowed}
-  .btn.link{background:transparent;box-shadow:none;color:var(--orange-soft);font-weight:600;font-size:.9rem;margin-top:14px;padding:6px}
   .msg{font-size:.84rem;margin-top:8px;min-height:0}
   .msg.err{color:#ff9f9f}
-  .msg.ok{color:#9fe6b0}
   .footnote{text-align:center;margin-top:18px;font-size:.78rem;color:rgba(255,255,255,.45)}
-  .otp-input{text-align:center;font-size:1.8rem;letter-spacing:10px;font-weight:800}
   .ticket{margin:24px auto;background:linear-gradient(135deg,var(--orange),#ff9a3c);color:#08182f;border-radius:16px;padding:22px;max-width:280px;box-shadow:0 16px 40px rgba(247,130,27,.4);text-align:center}
   .ticket .lbl{font-size:.7rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;opacity:.8}
   .ticket .num{font-size:3.4rem;font-weight:900;line-height:1;margin-top:4px}
   .success{text-align:center}
   .wa{display:inline-block;margin-top:8px;color:var(--orange-soft);font-size:.85rem;text-decoration:none;font-weight:600}
   .hidden{display:none}
-  .small{font-size:.85rem;color:rgba(255,255,255,.6);text-align:center;margin-top:6px}
 </style>
 </head>
 <body>
@@ -54,12 +50,12 @@
     <div class="key-mark"><span class="key-icon">🔑</span><span>My<span class="key">Key</span></span></div>
   </div>
 
-  <!-- ETAPA 1: DADOS -->
+  <!-- CADASTRO -->
   <div id="step1">
     <div class="brand" style="margin-top:-12px">
       <div class="eyebrow">Dia do Chaveiro</div>
       <div class="headline">Participe do<br>Sorteio</div>
-      <p class="sub">Preencha seus dados. Enviaremos um código ao seu e-mail para confirmar a inscrição.</p>
+      <p class="sub">Preencha seus dados e receba na hora o seu número da sorte.</p>
     </div>
     <div class="card">
       <label for="nome">Nome completo</label>
@@ -69,32 +65,15 @@
       <label for="email">E-mail</label>
       <input id="email" type="email" placeholder="seu@email.com" autocomplete="email">
       <div class="msg err" id="msg1"></div>
-      <button class="btn" id="btnEnviar">Enviar código</button>
+      <button class="btn" id="btnCadastrar">Quero participar</button>
     </div>
-    <p class="footnote">Um cadastro por e-mail. Seus dados são usados apenas para o sorteio.</p>
-  </div>
-
-  <!-- ETAPA 2: CÓDIGO -->
-  <div id="step2" class="hidden">
-    <div class="brand" style="margin-top:-12px">
-      <div class="eyebrow">Verificação</div>
-      <div class="headline" style="font-size:1.6rem">Digite o código</div>
-      <p class="sub">Enviamos um código de 6 dígitos para <strong id="emailEcho"></strong>.</p>
-    </div>
-    <div class="card">
-      <label for="codigo">Código de verificação</label>
-      <input id="codigo" class="otp-input" type="text" inputmode="numeric" maxlength="6" placeholder="••••••">
-      <div class="msg err" id="msg2"></div>
-      <button class="btn" id="btnConfirmar">Confirmar inscrição</button>
-      <button class="btn link" id="btnVoltar">Corrigir dados</button>
-      <button class="btn link" id="btnReenviar">Reenviar código</button>
-    </div>
+    <p class="footnote">Um cadastro por pessoa. Seus dados são usados apenas para o sorteio.</p>
   </div>
 
   <!-- SUCESSO -->
-  <div id="step3" class="hidden">
+  <div id="step2" class="hidden">
     <div class="card success">
-      <div class="eyebrow">Inscrição confirmada</div>
+      <div class="eyebrow">Cadastro confirmado</div>
       <h2 id="oi" style="margin:10px 0 4px">Boa sorte!</h2>
       <p class="sub">Este é o seu número da sorte:</p>
       <div class="ticket"><div class="lbl">Número</div><div class="num" id="meuNumero">000</div></div>
@@ -107,11 +86,9 @@
 <script>
 const $=id=>document.getElementById(id);
 const API='/api';
-let dados={};
-
 function pad(n){return String(n).padStart(3,'0')}
 
-$('btnEnviar').addEventListener('click', async ()=>{
+$('btnCadastrar').addEventListener('click', async ()=>{
   const nome=$('nome').value.trim();
   const telefone=$('telefone').value.trim();
   const email=$('email').value.trim();
@@ -120,44 +97,16 @@ $('btnEnviar').addEventListener('click', async ()=>{
   if(telefone.replace(/\D/g,'').length<7){m.textContent='Informe um telefone válido com código do país.';return}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){m.textContent='Informe um e-mail válido.';return}
 
-  const b=$('btnEnviar'); b.disabled=true; b.textContent='Enviando...';
+  const b=$('btnCadastrar'); b.disabled=true; b.textContent='Cadastrando...';
   try{
-    const r=await fetch(`${API}/solicitar-codigo`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,telefone,email})});
+    const r=await fetch(`${API}/cadastrar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,telefone,email})});
     const j=await r.json();
-    if(!r.ok){ m.textContent=j.erro||'Erro ao enviar.'; b.disabled=false; b.textContent='Enviar código'; return; }
-    dados={nome,email};
-    $('emailEcho').textContent=email;
-    $('step1').classList.add('hidden'); $('step2').classList.remove('hidden');
-    $('codigo').focus();
-  }catch(e){ m.textContent='Falha de conexão. Tente novamente.'; }
-  b.disabled=false; b.textContent='Enviar código';
-});
-
-$('btnConfirmar').addEventListener('click', async ()=>{
-  const codigo=$('codigo').value.trim();
-  const m=$('msg2'); m.textContent='';
-  if(!/^\d{6}$/.test(codigo)){m.textContent='Digite os 6 dígitos.';return}
-  const b=$('btnConfirmar'); b.disabled=true; b.textContent='Confirmando...';
-  try{
-    const r=await fetch(`${API}/confirmar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:dados.email,codigo})});
-    const j=await r.json();
-    if(!r.ok){ m.textContent=j.erro||'Código inválido.'; b.disabled=false; b.textContent='Confirmar inscrição'; return; }
-    $('oi').textContent=(dados.nome.split(' ')[0])+', boa sorte!';
+    if(!r.ok){ m.textContent=j.erro||'Erro ao cadastrar.'; b.disabled=false; b.textContent='Quero participar'; return; }
+    $('oi').textContent=(nome.split(' ')[0])+', boa sorte!';
     $('meuNumero').textContent=pad(j.numero);
-    $('step2').classList.add('hidden'); $('step3').classList.remove('hidden');
-  }catch(e){ m.textContent='Falha de conexão. Tente novamente.'; b.disabled=false; b.textContent='Confirmar inscrição'; }
+    $('step1').classList.add('hidden'); $('step2').classList.remove('hidden');
+  }catch(e){ m.textContent='Falha de conexão. Tente novamente.'; b.disabled=false; b.textContent='Quero participar'; }
 });
-
-$('btnVoltar').addEventListener('click', ()=>{ $('step2').classList.add('hidden'); $('step1').classList.remove('hidden'); });
-
-$('btnReenviar').addEventListener('click', async ()=>{
-  const m=$('msg2');
-  const r=await fetch(`${API}/solicitar-codigo`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:dados.nome,telefone:$('telefone').value.trim(),email:dados.email})});
-  const j=await r.json();
-  m.className='msg '+(r.ok?'ok':'err'); m.textContent=r.ok?'Novo código enviado.':(j.erro||'Erro.');
-});
-
-$('codigo').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'')});
 </script>
 </body>
 </html>

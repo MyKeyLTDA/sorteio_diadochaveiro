@@ -47,11 +47,16 @@ function validEmail(e) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || ''));
 }
 
-// telefone internacional: mantem digitos e um eventual + inicial
+// telefone internacional: mantem digitos e um eventual + inicial (para exibir)
 function cleanPhone(raw) {
   let s = String(raw || '').trim().replace(/[^\d+]/g, '');
   if (s.includes('+')) s = '+' + s.replace(/\+/g, '');
   return s;
+}
+
+// telefone normalizado para COMPARACAO de duplicado: somente digitos
+function normalizePhone(raw) {
+  return String(raw || '').replace(/\D/g, '');
 }
 
 // ---- Codigo OTP ----
@@ -78,6 +83,6 @@ function clientIp(event) {
 }
 
 module.exports = {
-  db, mailer, normalizeEmail, validEmail, cleanPhone,
+  db, mailer, normalizeEmail, validEmail, cleanPhone, normalizePhone,
   genCode, hashCode, json, clientIp, crypto,
 };

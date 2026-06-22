@@ -1,55 +1,40 @@
 -- ============================================================
 -- Sorteio Dia do Chaveiro - MyKey
--- Estrutura do banco no Supabase
+-- Estrutura do banco no Supabase (cadastro direto, sem OTP)
 -- Rode isto no SQL Editor do seu projeto Supabase.
+--
+-- Se voce JA rodou a versao anterior, rode ANTES estas linhas
+-- para limpar o que mudou:
+--   drop table if exists codigos_otp;
+--   drop table if exists participantes;
+--   drop sequence if exists seq_numero_sorte;
+-- e depois rode tudo abaixo.
 -- ============================================================
 
--- Tabela de participantes (somente cadastros VERIFICADOS entram aqui)
 create table if not exists participantes (
-  id           bigint generated always as identity primary key,
-  numero       integer unique not null,         -- numero da sorte sequencial
-  nome         text not null,
-  telefone     text not null,                   -- livre / internacional (com DDI)
-  email        text not null,
-  email_norm   text unique not null,            -- email normalizado (chave de identidade)
-  ip           text,
-  created_at   timestamptz default now()
+  id            bigint generated always as identity primary key,
+  numero        integer unique not null,        -- numero da sorte sequencial
+  nome          text not null,
+  telefone      text not null,                  -- como digitado (internacional)
+  telefone_norm text unique not null,           -- so digitos: bloqueia telefone repetido
+  email         text not null,
+  email_norm    text unique not null,           -- email normalizado: bloqueia email repetido
+  ip            text,
+  created_at    timestamptz default now()
 );
-
--- Tabela de codigos OTP pendentes (cadastros NAO confirmados)
-create table if not exists codigos_otp (
-  id           bigint generated always as identity primary key,
-  email_norm   text not null,
-  email        text not null,
-  nome         text not null,
-  telefone     text not null,
-  codigo_hash  text not null,                   -- hash do codigo, nunca o codigo cru
-  tentativas   integer default 0,
-  ip           text,
-  expira_em    timestamptz not null,
-  created_at   timestamptz default now()
-);
-
-create index if not exists idx_otp_email on codigos_otp (email_norm);
-create index if not exists idx_otp_expira on codigos_otp (expira_em);
 
 -- ============================================================
 -- RLS: bloqueia TUDO para chaves publicas (anon / authenticated).
--- Apenas a service_role (usada somente nas Netlify Functions)
--- consegue ler/escrever. O navegador NUNCA acessa estas tabelas.
+-- Apenas a service_role (usada somente nas Netlify Functions) acessa.
 -- ============================================================
 alter table participantes enable row level security;
-alter table codigos_otp   enable row level security;
-
--- Nao criamos NENHUMA policy para anon/authenticated.
--- Sem policy = acesso negado. service_role ignora RLS por padrao.
+-- Sem policy para anon/authenticated = acesso negado. service_role ignora RLS.
 
 -- ============================================================
--- Sequencia atomica para o numero da sorte (evita corrida)
+-- Sequencia atomica para o numero da sorte
 -- ============================================================
 create sequence if not exists seq_numero_sorte start 1;
 
--- Funcao que pega o proximo numero de forma atomica
 create or replace function proximo_numero()
 returns integer
 language sql
