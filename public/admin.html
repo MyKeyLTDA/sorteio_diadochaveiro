@@ -20,9 +20,9 @@
   label{display:block;font-size:.8rem;font-weight:600;margin-bottom:6px;color:rgba(255,255,255,.85)}
   input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:1rem;outline:none}
   input:focus{border-color:var(--orange)}
-  .btn{width:100%;margin-top:18px;padding:14px;border:none;border-radius:12px;background:var(--orange);color:#08182f;font-size:1rem;font-weight:800;cursor:pointer;box-shadow:0 10px 24px rgba(247,130,27,.35)}
-  .btn.secondary{background:rgba(255,255,255,.1);color:#fff;box-shadow:none}
-  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .botao{width:100%;margin-top:18px;padding:14px;border:none;border-radius:12px;background:var(--orange);color:#08182f;font-size:1rem;font-weight:800;cursor:pointer;box-shadow:0 10px 24px rgba(247,130,27,.35)}
+  .botao.secondary{background:rgba(255,255,255,.1);color:#fff;box-shadow:none}
+  .botao:disabled{opacity:.6;cursor:not-allowed}
   .msg{font-size:.84rem;margin-top:8px;color:#ff9f9f}
   .stat-row{display:flex;gap:12px;margin-bottom:18px}
   .stat{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
@@ -55,7 +55,7 @@
     <label for="senha">Senha de acesso</label>
     <input id="senha" type="password" placeholder="••••••••" autocomplete="current-password">
     <div class="msg" id="msgLogin"></div>
-    <button class="btn" id="btnLogin">Entrar</button>
+    <button class="botao" id="botaoLogin">Entrar</button>
   </div>
 
   <div id="panel" class="hidden">
@@ -64,9 +64,9 @@
       <div class="stat"><div class="v" id="stLast">—</div><div class="k">Último nº</div></div>
     </div>
     <div class="draw idle" id="draw">Pronto para sortear</div>
-    <button class="btn" id="btnSortear">🎲 Sortear ganhador</button>
-    <button class="btn secondary" id="btnAtualizar">Atualizar lista</button>
-    <button class="btn secondary" id="botaoRelatorio">📄 Baixar relatório dos sorteios</button>
+    <button class="botao" id="botaoSortear">🎲 Sortear ganhador</button>
+    <button class="botao secondary" id="botaoAtualizar">Atualizar lista</button>
+    <button class="botao secondary" id="botaoRelatorio">📄 Baixar relatório dos sorteios</button>
     <div class="list" id="lista"></div>
   </div>
 </div>
@@ -80,32 +80,39 @@ let participantes=[];
 function pad(n){return String(n).padStart(3,'0')}
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 
-$('btnLogin').addEventListener('click', entrar);
+// Faz uma requisição POST ao backend devolvendo {resposta, dados}.
+// Em falha de conexão devolve resposta=null (sem lançar) para que cada chamador trate com cláusula de guarda.
+async function requisitar(rota){
+  const resposta=await fetch(`${API}/${rota}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})}).catch(()=>null);
+  if(!resposta) return {resposta:null,dados:null};
+  const dados=await resposta.json().catch(()=>({}));
+  return {resposta,dados};
+}
+
+$('botaoLogin').addEventListener('click', entrar);
 $('senha').addEventListener('keydown',e=>{if(e.key==='Enter')entrar()});
 
 async function entrar(){
   senha=$('senha').value;
   $('msgLogin').textContent='';
-  const b=$('btnLogin'); b.disabled=true; b.textContent='Entrando...';
+  const botao=$('botaoLogin'); botao.disabled=true; botao.textContent='Entrando...';
   const ok=await carregar();
   if(ok){ $('login').classList.add('hidden'); $('panel').classList.remove('hidden'); }
   else{ $('msgLogin').textContent='Senha incorreta.'; senha=''; }
-  b.disabled=false; b.textContent='Entrar';
+  botao.disabled=false; botao.textContent='Entrar';
 }
 
 async function carregar(){
   $('lista').innerHTML='<div class="loading">Carregando...</div>';
-  try{
-    const r=await fetch(`${API}/listar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
-    if(r.status===401) return false;
-    const j=await r.json();
-    if(!r.ok) return false;
-    participantes=j.participantes||[];
-    $('stTotal').textContent=participantes.length;
-    $('stLast').textContent=participantes.length?pad(participantes[participantes.length-1].numero):'—';
-    render();
-    return true;
-  }catch(e){ $('lista').innerHTML='<div class="loading">Erro de conexão.</div>'; return false; }
+  const {resposta,dados}=await requisitar('listar');
+  if(!resposta){ $('lista').innerHTML='<div class="loading">Erro de conexão.</div>'; return false; }
+  if(resposta.status===401) return false;
+  if(!resposta.ok) return false;
+  participantes=dados.participantes||[];
+  $('stTotal').textContent=participantes.length;
+  $('stLast').textContent=participantes.length?pad(participantes[participantes.length-1].numero):'—';
+  render();
+  return true;
 }
 
 function render(winner){
@@ -119,55 +126,54 @@ function render(winner){
      </div>`).join('');
 }
 
-$('btnAtualizar').addEventListener('click', carregar);
+$('botaoAtualizar').addEventListener('click', carregar);
 
 // Baixa um relatório (CSV) com todos os sorteios já realizados
 $('botaoRelatorio').addEventListener('click', async ()=>{
-  const botao=$('botaoRelatorio'); const textoOriginal=botao.textContent; botao.disabled=true; botao.textContent='Gerando...';
-  try{
-    const resposta=await fetch(`${API}/historico`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
-    const dados=await resposta.json();
-    if(!resposta.ok){ alert(dados.erro||'Falha ao gerar relatório.'); return; }
-    const linhas=dados.sorteios||[];
-    if(!linhas.length){ alert('Nenhum sorteio registrado ainda.'); return; }
-    const cabecalho=['Data/hora','Número','Nome','Telefone','E-mail','Total participantes'];
-    const entreAspas=valor=>'"'+String(valor==null?'':valor).replace(/"/g,'""')+'"';
-    const corpo=linhas.map(sorteio=>[
-      new Date(sorteio.created_at).toLocaleString('pt-BR'),
-      pad(sorteio.numero), sorteio.nome, sorteio.telefone, sorteio.email, sorteio.total
-    ].map(entreAspas).join(';'));
-    const csv='﻿'+[cabecalho.map(entreAspas).join(';'),...corpo].join('\r\n');
-    const arquivoCsv=new Blob([csv],{type:'text/csv;charset=utf-8'});
-    const link=document.createElement('a');
-    link.href=URL.createObjectURL(arquivoCsv);
-    link.download='relatorio-sorteios.csv';
-    link.click(); URL.revokeObjectURL(link.href);
-  }catch(e){ alert('Falha de conexão.'); }
-  finally{ botao.disabled=false; botao.textContent=textoOriginal; }
+  const botao=$('botaoRelatorio'); const textoOriginal=botao.textContent;
+  const restaurarBotao=()=>{ botao.disabled=false; botao.textContent=textoOriginal; };
+  botao.disabled=true; botao.textContent='Gerando...';
+
+  const {resposta,dados}=await requisitar('historico');
+  if(!resposta){ alert('Falha de conexão.'); restaurarBotao(); return; }
+  if(!resposta.ok){ alert(dados.erro||'Falha ao gerar relatório.'); restaurarBotao(); return; }
+  const linhas=dados.sorteios||[];
+  if(!linhas.length){ alert('Nenhum sorteio registrado ainda.'); restaurarBotao(); return; }
+
+  const cabecalho=['Data/hora','Número','Nome','Telefone','E-mail','Total participantes'];
+  const entreAspas=valor=>'"'+String(valor==null?'':valor).replace(/"/g,'""')+'"';
+  const corpo=linhas.map(sorteio=>[
+    new Date(sorteio.created_at).toLocaleString('pt-BR'),
+    pad(sorteio.numero), sorteio.nome, sorteio.telefone, sorteio.email, sorteio.total
+  ].map(entreAspas).join(';'));
+  const csv='﻿'+[cabecalho.map(entreAspas).join(';'),...corpo].join('\r\n');
+  const arquivoCsv=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(arquivoCsv);
+  link.download='relatorio-sorteios.csv';
+  link.click(); URL.revokeObjectURL(link.href);
+  restaurarBotao();
 });
 
-$('btnSortear').addEventListener('click', async ()=>{
+$('botaoSortear').addEventListener('click', async ()=>{
   await carregar();
   if(!participantes.length){ $('draw').className='draw idle'; $('draw').textContent='Nenhum participante.'; return; }
   const d=$('draw'); d.className='draw';
   // animacao visual; resultado real vem do servidor
   let t=0; const total=18;
   const spin=setInterval(async ()=>{
-    const r=participantes[Math.floor(Math.random()*participantes.length)];
-    d.innerHTML=`<div class="wn">${pad(r.numero)}</div>`;
-    if(++t>=total){
-      clearInterval(spin);
-      try{
-        const res=await fetch(`${API}/sortear`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
-        const j=await res.json();
-        if(!res.ok){ d.className='draw idle'; d.textContent=j.erro||'Erro ao sortear.'; return; }
-        const g=j.ganhador;
-        d.innerHTML=`<div class="wn">${pad(g.numero)}</div>
-          <div class="wname">🎉 ${esc(g.nome)}</div>
-          <div class="wmeta">${esc(g.telefone)} • ${esc(g.email)}</div>`;
-        render(g.numero);
-      }catch(e){ d.className='draw idle'; d.textContent='Falha de conexão.'; }
-    }
+    const participante=participantes[Math.floor(Math.random()*participantes.length)];
+    d.innerHTML=`<div class="wn">${pad(participante.numero)}</div>`;
+    if(++t<total) return;
+    clearInterval(spin);
+    const {resposta,dados}=await requisitar('sortear');
+    if(!resposta){ d.className='draw idle'; d.textContent='Falha de conexão.'; return; }
+    if(!resposta.ok){ d.className='draw idle'; d.textContent=dados.erro||'Erro ao sortear.'; return; }
+    const ganhador=dados.ganhador;
+    d.innerHTML=`<div class="wn">${pad(ganhador.numero)}</div>
+      <div class="wname">🎉 ${esc(ganhador.nome)}</div>
+      <div class="wmeta">${esc(ganhador.telefone)} • ${esc(ganhador.email)}</div>`;
+    render(ganhador.numero);
   },80);
 });
 </script>
