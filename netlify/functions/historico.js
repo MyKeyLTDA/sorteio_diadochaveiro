@@ -1,30 +1,32 @@
 // netlify/functions/historico.js
 // Admin: lista os sorteios já realizados (para relatório). Exige senha (validada no servidor).
-const L = require('./_lib');
+const utilitarios = require('./_lib');
 
-function senhaOk(enviada) {
-  const a = Buffer.from(String(enviada || ''));
-  const b = Buffer.from(String(process.env.ADMIN_PASSWORD || ''));
-  if (a.length !== b.length) return false;
-  return L.crypto.timingSafeEqual(a, b);
+function senhaConfere(senhaEnviada) {
+  const bufferEnviada = Buffer.from(String(senhaEnviada || ''));
+  const bufferEsperada = Buffer.from(String(process.env.ADMIN_PASSWORD || ''));
+  if (bufferEnviada.length !== bufferEsperada.length) return false;
+  return utilitarios.crypto.timingSafeEqual(bufferEnviada, bufferEsperada);
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') return L.json(405, { erro: 'Metodo nao permitido' });
+// exports.handler é o nome exigido pelas Netlify Functions (não pode ser traduzido).
+exports.handler = async (evento) => {
+  if (evento.httpMethod !== 'POST') return utilitarios.json(405, { erro: 'Metodo nao permitido' });
 
-  let payload;
-  try { payload = JSON.parse(event.body || '{}'); }
-  catch { return L.json(400, { erro: 'Dados invalidos' }); }
+  let corpoRequisicao;
+  try { corpoRequisicao = JSON.parse(evento.body || '{}'); }
+  catch { return utilitarios.json(400, { erro: 'Dados invalidos' }); }
 
-  if (!senhaOk(payload.senha)) return L.json(401, { erro: 'Senha incorreta.' });
+  if (!senhaConfere(corpoRequisicao.senha)) return utilitarios.json(401, { erro: 'Senha incorreta.' });
 
-  const db = L.db();
-  const { data, error } = await db
+  const bancoDados = utilitarios.db();
+  const { data: sorteios, error: erro } = await bancoDados
     .from('sorteios')
     .select('numero, nome, telefone, email, total, created_at')
     .order('created_at', { ascending: true });
 
   // Se a tabela ainda nao existir, devolve lista vazia em vez de erro 500.
-  if (error) return L.json(200, { ok: true, total: 0, sorteios: [], aviso: 'Tabela de sorteios ainda nao criada.' });
-  return L.json(200, { ok: true, total: data.length, sorteios: data });
+  if (erro) return utilitarios.json(200, { ok: true, total: 0, sorteios: [], aviso: 'Tabela de sorteios ainda nao criada.' });
+  const lista = sorteios || [];
+  return utilitarios.json(200, { ok: true, total: lista.length, sorteios: lista });
 };

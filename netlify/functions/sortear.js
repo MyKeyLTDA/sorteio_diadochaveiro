@@ -19,10 +19,12 @@ exports.handler = async (event) => {
   if (!senhaOk(payload.senha)) return L.json(401, { erro: 'Senha incorreta.' });
 
   const db = L.db();
-  const { data, error } = await db
+  // Protege contra resultado/data ausentes antes de acessar .length (evita destructuring de undefined).
+  const resultado = await db
     .from('participantes').select('numero, nome, telefone, email');
+  const { data, error } = resultado || {};
   if (error) return L.json(500, { erro: 'Falha ao sortear.' });
-  if (!data.length) return L.json(400, { erro: 'Nenhum participante para sortear.' });
+  if (!data || !data.length) return L.json(400, { erro: 'Nenhum participante para sortear.' });
 
   // Sorteio com aleatoriedade criptografica
   const idx = L.crypto.randomInt(0, data.length);
