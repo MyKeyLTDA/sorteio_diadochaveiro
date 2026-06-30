@@ -28,5 +28,17 @@ exports.handler = async (event) => {
   const idx = L.crypto.randomInt(0, data.length);
   const ganhador = data[idx];
 
-  return L.json(200, { ok: true, total: data.length, ganhador });
+  // Registra o sorteio (historico para relatorio). Se a tabela 'sorteios' ainda nao
+  // existir, o sorteio NAO quebra — apenas nao grava (registrado: false).
+  let registrado = false;
+  const { error: errReg } = await db.from('sorteios').insert({
+    numero: ganhador.numero,
+    nome: ganhador.nome,
+    telefone: ganhador.telefone,
+    email: ganhador.email,
+    total: data.length,
+  });
+  if (!errReg) registrado = true;
+
+  return L.json(200, { ok: true, total: data.length, ganhador, registrado });
 };

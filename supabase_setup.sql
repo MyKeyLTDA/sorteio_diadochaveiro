@@ -41,3 +41,20 @@ language sql
 as $$
   select nextval('seq_numero_sorte')::integer;
 $$;
+
+-- ============================================================
+-- Registro dos sorteios realizados (histórico para relatório)
+-- Cada clique em "Sortear" grava aqui o ganhador, com data/hora.
+-- ============================================================
+create table if not exists sorteios (
+  id            bigint generated always as identity primary key,
+  numero        integer not null,               -- número da sorte do ganhador
+  nome          text not null,
+  telefone      text,
+  email         text,
+  total         integer not null,               -- total de participantes no momento do sorteio
+  created_at    timestamptz default now()
+);
+
+alter table sorteios enable row level security;
+-- Sem policy para anon/authenticated = acesso negado. service_role (Functions) ignora RLS.

@@ -66,6 +66,7 @@
     <div class="draw idle" id="draw">Pronto para sortear</div>
     <button class="btn" id="btnSortear">🎲 Sortear ganhador</button>
     <button class="btn secondary" id="btnAtualizar">Atualizar lista</button>
+    <button class="btn secondary" id="btnRelatorio">📄 Baixar relatório dos sorteios</button>
     <div class="list" id="lista"></div>
   </div>
 </div>
@@ -119,6 +120,31 @@ function render(winner){
 }
 
 $('btnAtualizar').addEventListener('click', carregar);
+
+// Baixa um relatório (CSV) com todos os sorteios já realizados
+$('btnRelatorio').addEventListener('click', async ()=>{
+  const b=$('btnRelatorio'); const txt=b.textContent; b.disabled=true; b.textContent='Gerando...';
+  try{
+    const r=await fetch(`${API}/historico`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
+    const j=await r.json();
+    if(!r.ok){ alert(j.erro||'Falha ao gerar relatório.'); return; }
+    const linhas=j.sorteios||[];
+    if(!linhas.length){ alert('Nenhum sorteio registrado ainda.'); return; }
+    const cab=['Data/hora','Número','Nome','Telefone','E-mail','Total participantes'];
+    const aspas=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    const corpo=linhas.map(s=>[
+      new Date(s.created_at).toLocaleString('pt-BR'),
+      pad(s.numero), s.nome, s.telefone, s.email, s.total
+    ].map(aspas).join(';'));
+    const csv='﻿'+[cab.map(aspas).join(';'),...corpo].join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='relatorio-sorteios.csv';
+    a.click(); URL.revokeObjectURL(a.href);
+  }catch(e){ alert('Falha de conexão.'); }
+  finally{ b.disabled=false; b.textContent=txt; }
+});
 
 $('btnSortear').addEventListener('click', async ()=>{
   await carregar();
